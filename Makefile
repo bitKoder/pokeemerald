@@ -112,6 +112,10 @@ INCLUDE_CPP_ARGS := $(INCLUDE_DIRS:%=-iquote %)
 INCLUDE_SCANINC_ARGS := $(INCLUDE_DIRS:%=-I %)
 
 O_LEVEL ?= 2
+# force unoptimized code if UNOPTIMIZED is set
+ifeq ($(UNOPTIMIZED),1)
+  O_LEVEL = 0
+endif
 CPPFLAGS := $(INCLUDE_CPP_ARGS) -Wno-trigraphs -DMODERN=$(MODERN)
 ifeq ($(MODERN),0)
   CPPFLAGS += -I tools/agbcc/include -I tools/agbcc -nostdinc -undef -std=gnu89
