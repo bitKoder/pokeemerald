@@ -2830,6 +2830,7 @@ BattleScript_GiveExp::
 BattleScript_HandleFaintedMon::
 	checkteamslost BattleScript_LinkHandleFaintedMonMultiple
 	jumpifbyte CMP_NOT_EQUAL, gBattleOutcome, 0, BattleScript_FaintedMonEnd
+	jumpifnotbattletype BATTLE_TYPE_TRAINER, BattleScript_TryReplaceFaintedWildMon
 	jumpifbattletype BATTLE_TYPE_TRAINER, BattleScript_FaintedMonTryChoose
 	jumpifword CMP_NO_COMMON_BITS, gHitMarker, HITMARKER_PLAYER_FAINTED, BattleScript_FaintedMonTryChoose
 @ Yes/No for sending out a new Pokémon if one is defeated in a wild battle
@@ -2894,6 +2895,21 @@ BattleScript_FaintedMonSendOutNew::
 	jumpifbattletype BATTLE_TYPE_DOUBLE, BattleScript_FaintedMonEnd
 	cancelallactions
 BattleScript_FaintedMonEnd::
+	end2
+
+BattleScript_TryReplaceFaintedWildMon::
+	jumpifword CMP_NO_COMMON_BITS, gHitMarker, HITMARKER_PLAYER_FAINTED, BattleScript_ReplaceFaintedWildMon
+	return
+
+BattleScript_ReplaceFaintedWildMon::
+	getswitchedmondata BS_FAINTED
+	switchindataupdate BS_FAINTED
+	hpthresholds BS_FAINTED
+	switchinanim BS_FAINTED, FALSE
+	waitstate
+	resetplayerfainted
+	switchineffects BS_FAINTED
+	cancelallactions
 	end2
 
 BattleScript_LinkHandleFaintedMonMultiple::

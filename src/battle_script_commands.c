@@ -3528,6 +3528,8 @@ static void Cmd_getexp(void)
     }
 }
 
+#define MAX_HORDE_STAGE 0
+
 // For battles that aren't BATTLE_TYPE_LINK or BATTLE_TYPE_RECORDED_LINK, the only thing this
 // command does is check whether the player has won/lost by totaling each team's HP. It then
 // sets gBattleOutcome accordingly, if necessary.
@@ -3573,7 +3575,7 @@ static void Cmd_checkteamslost(void)
             HP_count += GetMonData(&gEnemyParty[i], MON_DATA_HP);
         }
     }
-    if (HP_count == 0)
+    if (HP_count == 0 && (gBattleTypeFlags & BATTLE_TYPE_TRAINER || gBattleStruct->hordeStage >= MAX_HORDE_STAGE))
         gBattleOutcome |= B_OUTCOME_WON;
 
     // For link battles that haven't ended, count number of empty battler spots
@@ -3617,6 +3619,8 @@ static void Cmd_checkteamslost(void)
         gBattlescriptCurrInstr += 5;
     }
 }
+
+#undef MAX_HORDE_STAGE
 
 static void MoveValuesCleanUp(void)
 {
@@ -4603,6 +4607,68 @@ static void Cmd_returnatktoball(void)
     gBattlescriptCurrInstr++;
 }
 
+static u8 PickWildMonNature(void)
+{
+    u8 i;
+    u8 j;
+    struct Pokeblock *safariPokeblock;
+    u8 natures[NUM_NATURES];
+
+    // check synchronize for a Pokémon with the same ability
+    if (!GetMonData(&gPlayerParty[0], MON_DATA_SANITY_IS_EGG)
+        && GetMonAbility(&gPlayerParty[0]) == ABILITY_SYNCHRONIZE
+        && Random() % 2 == 0)
+    {
+        return GetMonData(&gPlayerParty[0], MON_DATA_PERSONALITY) % NUM_NATURES;
+    }
+
+    // random nature
+    return Random() % NUM_NATURES;
+}
+
+static void CreateWildMonReplacement(void) {
+    u16 species;
+    u16 level;
+    bool32 checkCuteCharm;
+
+    gActiveBattler = GetBattlerForBattleScript(gBattlescriptCurrInstr[1]);
+
+    ZeroEnemyPartyMons();
+    checkCuteCharm = TRUE;
+    species = gBattleMons[gActiveBattler].species;
+    level = gBattleMons[gActiveBattler].level + 1;
+
+    switch (gSpeciesInfo[species].genderRatio)
+    {
+    case MON_MALE:
+    case MON_FEMALE:
+    case MON_GENDERLESS:
+        checkCuteCharm = FALSE;
+        break;
+    }
+
+    if (checkCuteCharm
+        && !GetMonData(&gPlayerParty[0], MON_DATA_SANITY_IS_EGG)
+        && GetMonAbility(&gPlayerParty[0]) == ABILITY_CUTE_CHARM
+        && Random() % 3 != 0)
+    {
+        u16 leadingMonSpecies = GetMonData(&gPlayerParty[0], MON_DATA_SPECIES);
+        u32 leadingMonPersonality = GetMonData(&gPlayerParty[0], MON_DATA_PERSONALITY);
+        u8 gender = GetGenderFromSpeciesAndPersonality(leadingMonSpecies, leadingMonPersonality);
+
+        // misses mon is genderless check, although no genderless mon can have cute charm as ability
+        if (gender == MON_FEMALE)
+            gender = MON_MALE;
+        else
+            gender = MON_FEMALE;
+
+        CreateMonWithGenderNatureLetter(&gEnemyParty[0], species, level, USE_RANDOM_IVS, gender, PickWildMonNature(), 0);
+        return;
+    }
+
+    CreateMonWithNature(&gEnemyParty[0], species, level, USE_RANDOM_IVS, PickWildMonNature());
+}
+
 static void Cmd_getswitchedmondata(void)
 {
     if (gBattleControllerExecFlags)
@@ -4610,7 +4676,15 @@ static void Cmd_getswitchedmondata(void)
 
     gActiveBattler = GetBattlerForBattleScript(gBattlescriptCurrInstr[1]);
 
-    gBattlerPartyIndexes[gActiveBattler] = *(gBattleStruct->monToSwitchIntoId + gActiveBattler);
+    if (!(gBattleTypeFlags & BATTLE_TYPE_TRAINER)) {
+        gBattleStruct->hordeStage++;
+        CreateWildMonReplacement();
+        gBattleScripting.battler = gActiveBattler;
+        gBattleStruct->givenExpMons ^= gBitTable[gBattlerPartyIndexes[gActiveBattler]];
+    }
+    else {
+        gBattlerPartyIndexes[gActiveBattler] = *(gBattleStruct->monToSwitchIntoId + gActiveBattler);
+    }
 
     BtlController_EmitGetMonData(B_COMM_TO_CONTROLLER, REQUEST_ALL_BATTLE, gBitTable[gBattlerPartyIndexes[gActiveBattler]]);
     MarkBattlerForControllerExec(gActiveBattler);
